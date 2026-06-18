@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TikTok Quiz Studio — General Knowledge</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.studio{display:flex;flex-direction:column;gap:10px;padding:10px;background:#f0f0f0;}
+.top-bar{display:flex;gap:6px;flex-wrap:wrap;}
+.tab-btn{padding:7px 13px;border-radius:20px;border:none;background:#ddd;color:#555;font-size:11px;font-weight:700;cursor:pointer;}
+.tab-btn.active{background:#6B21A8;color:white;}
+.voice-select{padding:7px 10px;border-radius:20px;border:1.5px solid #ddd;background:#fff;color:#555;font-size:11px;font-weight:700;cursor:pointer;margin-left:auto;}
+.panel{display:none;}.panel.active{display:block;}
+.phone-outer{display:flex;justify-content:center;padding:6px 0;}
+.phone{width:280px;height:580px;background:#f5f5f5;border-radius:32px;border:3px solid #444;overflow:hidden;display:flex;flex-direction:column;}
+.quiz-header{background:#6B21A8;padding:12px 16px 10px;text-align:center;flex-shrink:0;z-index:10;position:relative;}
+.quiz-title-txt{font-size:11px;font-weight:800;color:white;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px;}
+.prog-bar-wrap{background:rgba(255,255,255,.3);border-radius:10px;height:5px;overflow:hidden;margin-bottom:5px;}
+.prog-bar-fill{height:100%;background:white;border-radius:10px;transition:width .4s;}
+.prog-label-txt{font-size:10px;color:rgba(255,255,255,.9);font-weight:600;}
+.quiz-body{flex:1;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 14px 14px;gap:12px;position:relative;overflow:hidden;}
+.body-flash{position:absolute;inset:0;background:white;opacity:0;pointer-events:none;z-index:10;transition:opacity .12s;}
+.timer-wrap{display:flex;justify-content:center;}
+.timer-svg{width:52px;height:52px;}
+.timer-num{font-size:15px;font-weight:900;fill:#333;text-anchor:middle;dominant-baseline:central;}
+.q-card{background:white;border:2px solid #c8aaee;border-radius:14px;padding:14px 16px;width:100%;text-align:center;}
+.q-text-main{font-size:13px;font-weight:800;color:#111;line-height:1.35;}
+.options-list{display:flex;flex-direction:column;gap:8px;width:100%;}
+.opt-row{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:50px;background:white;border:1.5px solid #e5e7eb;cursor:pointer;transition:all .18s;}
+.opt-row:hover{border-color:#c8aaee;background:#faf5ff;}
+.opt-badge{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white;flex-shrink:0;}
+.opt-text{font-size:12px;font-weight:600;color:#222;flex:1;}
+.opt-row.correct{background:#ecfdf5;border-color:#10b981;}
+.opt-row.correct .opt-text{color:#065f46;}
+.opt-row.correct .opt-badge{background:#10b981!important;}
+.opt-row.wrong{background:#fef2f2;border-color:#ef4444;}
+.opt-row.wrong .opt-text{color:#991b1b;}
+.reveal-bar{background:#16a34a;border-radius:50px;padding:12px 18px;text-align:center;width:100%;font-size:13px;font-weight:800;color:white;visibility:hidden;}
+.next-btn{background:#6B21A8;border-radius:50px;padding:11px 18px;text-align:center;width:100%;font-size:12px;font-weight:800;color:white;display:none;border:none;cursor:pointer;}
+.end-body{flex:1;background:#f5f5f5;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px 16px;gap:10px;}
+.end-trophy{font-size:40px;text-align:center;}
+.end-title{font-size:17px;font-weight:900;color:#1a1a1a;text-align:center;}
+.score-display{font-size:48px;font-weight:900;color:#6B21A8;line-height:1;}
+.score-label{font-size:11px;color:#666;font-weight:600;text-align:center;}
+.score-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;width:100%;}
+.score-cell{aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;}
+.score-cell.got{background:#16a34a;color:white;}
+.score-cell.miss{background:#fca5a5;color:#7f1d1d;}
+.cta-box{background:white;border:1.5px solid #e5e7eb;border-radius:12px;padding:10px 14px;text-align:center;width:100%;}
+.cta-box p{font-size:11px;color:#444;line-height:1.5;font-weight:600;}
+.restart-btn{background:#6B21A8;border-radius:50px;padding:10px 24px;color:white;font-size:12px;font-weight:800;border:none;cursor:pointer;}
+.edit-panel{background:white;border-radius:12px;padding:12px;border:1px solid #e5e7eb;}
+.ep-lbl{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.q-scroll{display:flex;flex-direction:column;gap:5px;max-height:110px;overflow-y:auto;margin-bottom:10px;}
+.qrow{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f9f9f9;border-radius:8px;cursor:pointer;border:1.5px solid transparent;}
+.qrow.sel{border-color:#6B21A8;background:#faf5ff;}
+.qrow-num{font-size:10px;font-weight:800;color:#6B21A8;min-width:16px;}
+.qrow-txt{font-size:11px;color:#333;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fg{margin-bottom:8px;}
+.fl{font-size:10px;color:#666;font-weight:700;margin-bottom:3px;text-transform:uppercase;}
+.fi{width:100%;background:white;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 9px;color:#111;font-size:12px;font-family:Arial;}
+.opts-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.oer{display:flex;gap:5px;align-items:center;}
+.olbl{font-size:10px;font-weight:900;color:#6B21A8;min-width:14px;}
+.crow{display:flex;gap:5px;}
+.cbtn{padding:5px 12px;border-radius:20px;border:1.5px solid #e5e7eb;background:white;color:#888;font-size:11px;font-weight:700;cursor:pointer;}
+.cbtn.sel{background:#16a34a;border-color:#16a34a;color:white;}
+.arow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.abtn{padding:7px 12px;border-radius:8px;border:none;font-size:11px;font-weight:700;cursor:pointer;}
+.abtn.save{background:#6B21A8;color:white;}
+.abtn.add{background:#f3f4f6;color:#555;}
+.abtn.del{background:#fef2f2;color:#ef4444;}
+.export-panel{background:white;border-radius:12px;padding:12px;border:1px solid #e5e7eb;}
+.exp-hint{font-size:11px;color:#888;margin-bottom:10px;line-height:1.5;}
+.exp-opts{display:flex;flex-direction:column;gap:7px;}
+.exp-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;background:#f9f9f9;border-radius:10px;border:1.5px solid #e5e7eb;cursor:pointer;transition:border-color .2s;}
+.exp-btn:hover{border-color:#6B21A8;}
+.exp-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0;}
+.exp-name{font-size:12px;font-weight:700;color:#111;}
+.exp-desc{font-size:10px;color:#888;margin-top:1px;}
+body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;}
+.studio{max-width:420px;margin:0 auto;width:100%;}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+</style>
+</head>
+<body>
+<h2 class="sr-only">TikTok General Knowledge Quiz with stable purple header and body-only flash transition</h2>
+
+<div class="studio">
+  <div class="top-bar">
+    <button class="tab-btn active" onclick="showTab('preview',this)">Preview</button>
+    <button class="tab-btn" onclick="showTab('edit',this)">Edit Questions</button>
+    <button class="tab-btn" onclick="showTab('export',this)">Export</button>
+    <select class="voice-select" id="voiceSelect" onchange="onVoiceChange()">
+      <option value="female">🔊 Female Voice</option>
+      <option value="male">🔊 Male Voice</option>
+    </select>
+  </div>
+
+  <div class="panel active" id="tab-preview">
+    <div class="phone-outer">
+      <div class="phone">
+
+        <div class="quiz-header">
+          <div class="quiz-title-txt">General Knowledge Quiz</div>
+          <div class="prog-bar-wrap"><div class="prog-bar-fill" id="progFill" style="width:10%"></div></div>
+          <div class="prog-label-txt" id="progLabel">Question 1 of 10</div>
+        </div>
+
+        <div class="quiz-body" id="quizBody">
+          <div class="body-flash" id="bodyFlash"></div>
+          <div class="timer-wrap">
+            <svg class="timer-svg" viewBox="0 0 52 52">
+              <circle cx="26" cy="26" r="22" fill="none" stroke="#e5e7eb" stroke-width="4"/>
+              <circle cx="26" cy="26" r="22" fill="none" stroke="#16a34a" stroke-width="4"
+                stroke-dasharray="138.2" stroke-dashoffset="0" stroke-linecap="round"
+                transform="rotate(-90 26 26)" id="timerArc"/>
+              <text x="26" y="26" class="timer-num" id="timerText">5</text>
+            </svg>
+          </div>
+          <div class="q-card">
+            <div class="q-text-main" id="qText"></div>
+          </div>
+          <div class="options-list" id="optsList"></div>
+          <div class="reveal-bar" id="revealBar"></div>
+        </div>
+
+        <div class="end-body" id="endBody">
+          <div class="end-trophy" id="endTrophy">🏆</div>
+          <div class="end-title" id="endTitle"></div>
+          <div class="score-display" id="scoreDisplay"></div>
+          <div class="score-label" id="scoreLabel"></div>
+          <div class="score-grid" id="scoreGrid"></div>
+          <div class="cta-box"><p id="ctaText"></p></div>
+          <button class="restart-btn" onclick="restart()">Play Again</button>
+        </div>
+
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:6px;">
+      <button class="abtn save" style="font-size:11px;border-radius:20px;" onclick="restart()">Restart Preview</button>
+    </div>
+    <div style="text-align:center;margin-top:8px;max-width:280px;margin-left:auto;margin-right:auto;">
+      <button class="next-btn" id="nextBtn" onclick="nextQ()" style="position:static;">Next Question →</button>
+    </div>
+  </div>
+
+  <div class="panel" id="tab-edit">
+    <div class="edit-panel">
+      <div class="ep-lbl">Questions</div>
+      <div class="q-scroll" id="qScroll"></div>
+      <div class="fg"><div class="fl">Question</div><input class="fi" id="eQ" type="text"/></div>
+      <div class="fg">
+        <div class="fl">Options</div>
+        <div class="opts-grid">
+          <div class="oer"><span class="olbl">A</span><input class="fi" id="eA"/></div>
+          <div class="oer"><span class="olbl">B</span><input class="fi" id="eB"/></div>
+          <div class="oer"><span class="olbl">C</span><input class="fi" id="eC"/></div>
+          <div class="oer"><span class="olbl">D</span><input class="fi" id="eD"/></div>
+        </div>
+      </div>
+      <div class="fg">
+        <div class="fl">Correct Answer</div>
+        <div class="crow">
+          <button class="cbtn" data-v="A" onclick="setCorrect('A')">A</button>
+          <button class="cbtn" data-v="B" onclick="setCorrect('B')">B</button>
+          <button class="cbtn" data-v="C" onclick="setCorrect('C')">C</button>
+          <button class="cbtn" data-v="D" onclick="setCorrect('D')">D</button>
+        </div>
+      </div>
+      <div class="arow">
+        <button class="abtn save" onclick="saveEdit()">Save</button>
+        <button class="abtn add" onclick="addNew()">+ Add</button>
+        <button class="abtn del" onclick="deleteQ()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="tab-export">
+    <div class="export-panel">
+      <div class="exp-hint">Record your screen while previewing for TikTok. Download your questions or script below.</div>
+      <div class="exp-opts">
+        <div class="exp-btn" onclick="exportJSON()">
+          <div class="exp-ico" style="background:#16a34a;">J</div>
+          <div><div class="exp-name">Export Questions (JSON)</div><div class="exp-desc">Save & reuse your question bank</div></div>
+        </div>
+        <div class="exp-btn" onclick="exportScript()">
+          <div class="exp-ico" style="background:#ef4444;">S</div>
+          <div><div class="exp-name">Download Voice Script (TXT)</div><div class="exp-desc">Full script with pauses for voiceover</div></div>
+        </div>
+        <div class="exp-btn" onclick="exportHTML()">
+          <div class="exp-ico" style="background:#6B21A8;">H</div>
+          <div><div class="exp-name">Download Quiz (HTML)</div><div class="exp-desc">Open fullscreen in browser to record</div></div>
+        </div>
+        <div class="exp-btn" onclick="sendPrompt('Give me 10 brand new TikTok quiz questions on a different topic ↗')">
+          <div class="exp-ico" style="background:#BA7517;">+</div>
+          <div><div class="exp-name">Generate New Questions ↗</div><div class="exp-desc">Get a fresh set on any topic</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function sendPrompt(text){
+  alert('This button only works inside the Claude chat widget where this app was generated.\n\nIn this standalone copy, you can edit questions directly in the "Edit Questions" tab instead.');
+}
+</script>
+<script>
+let questions=[
+  {q:"What is the fastest animal on land?",opts:["Lion","Cheetah","Horse","Eagle"],correct:"B",fact:"Cheetahs sprint at up to 112 km/h — faster than a car on a city road!"},
+  {q:"How many continents are there on Earth?",opts:["5","6","7","8"],correct:"C",fact:"7 continents: Africa, Antarctica, Asia, Australia, Europe, North & South America!"},
+  {q:"What is the chemical symbol for water?",opts:["CO2","H2O","O2","NaCl"],correct:"B",fact:"H2O means 2 hydrogen atoms bonded to 1 oxygen atom!"},
+  {q:"Which planet is closest to the Sun?",opts:["Venus","Earth","Mars","Mercury"],correct:"D",fact:"Mercury orbits the Sun in just 88 Earth days!"},
+  {q:"Who painted the Mona Lisa?",opts:["Van Gogh","Picasso","Da Vinci","Rembrandt"],correct:"C",fact:"Leonardo da Vinci painted it between 1503 and 1519 — it took 16 years!"},
+  {q:"How many sides does a hexagon have?",opts:["5","6","7","8"],correct:"B",fact:"Honeycombs are hexagons — bees use this shape because it's the most efficient!"},
+  {q:"What is the capital of Australia?",opts:["Sydney","Melbourne","Canberra","Brisbane"],correct:"C",fact:"Canberra was purpose-built as the capital in 1913!"},
+  {q:"Which element has the symbol O?",opts:["Gold","Iron","Oxygen","Silver"],correct:"C",fact:"Oxygen makes up about 21% of Earth's atmosphere!"},
+  {q:"What year did World War II end?",opts:["1943","1944","1945","1946"],correct:"C",fact:"WWII ended in 1945 — V-E Day May 8, V-J Day Sep 2!"},
+  {q:"What is the largest ocean on Earth?",opts:["Atlantic","Indian","Arctic","Pacific"],correct:"D",fact:"The Pacific Ocean covers more area than all of Earth's land combined!"}
+];
+
+const badgeCols=["#6B21A8","#6B21A8","#6B21A8","#6B21A8"];
+let cur=0,score=0,tv=5,tInt=null,answered=false,editIdx=0,tempCorrect="A";
+let answerTimeout=null;
+let voiceGender='female';
+let availableVoices=[];
+
+function loadVoices(){
+  try{ availableVoices=window.speechSynthesis.getVoices()||[]; }catch(e){ availableVoices=[]; }
+}
+if(typeof window!=='undefined'&&window.speechSynthesis){
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged=loadVoices;
+}
+
+const FEMALE_HINTS=['female','samantha','victoria','zira','susan','karen','moira','tessa','fiona','allison','ava','serena','kathy','princess','flo','sandy','nicky','female 1','female 2','woman','girl','aria','jenny','michelle','emma','olivia','sara','salli','joanna','kendra','kimberly','ivy','amy','emma'];
+const MALE_HINTS=['male','daniel','david','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','guy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher'];
+
+function pickVoice(gender){
+  if(!availableVoices.length) loadVoices();
+  const englishVoices=availableVoices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('en'));
+  const pool=englishVoices.length?englishVoices:availableVoices;
+  if(!pool.length) return null;
+  const hints=gender==='male'?MALE_HINTS:FEMALE_HINTS;
+  const oppositeHints=gender==='male'?FEMALE_HINTS:MALE_HINTS;
+  const match=pool.find(v=>hints.some(h=>v.name.toLowerCase().includes(h)));
+  if(match) return match;
+  const notOpposite=pool.filter(v=>!oppositeHints.some(h=>v.name.toLowerCase().includes(h)));
+  const candidates=notOpposite.length?notOpposite:pool;
+  if(candidates.length>1){
+    const sorted=[...candidates].sort((a,b)=>a.name.localeCompare(b.name));
+    return gender==='male'?sorted[0]:sorted[sorted.length-1];
+  }
+  return candidates[0]||null;
+}
+
+function onVoiceChange(){
+  voiceGender=document.getElementById('voiceSelect').value;
+  speak(voiceGender==='male'?'This is the male voice':'This is the female voice');
+}
+
+let audioCtx=null;
+function getAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq,durationMs,type,vol){
+  const ctx=getAudioCtx();
+  if(!ctx) return;
+  const osc=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.type=type||'sine';
+  osc.frequency.value=freq;
+  gain.gain.value=vol||0.15;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  const now=ctx.currentTime;
+  gain.gain.setValueAtTime(vol||0.15,now);
+  gain.gain.exponentialRampToValueAtTime(0.001,now+durationMs/1000);
+  osc.start(now);
+  osc.stop(now+durationMs/1000);
+}
+function playTick(){ playTone(880,90,'square',0.08); }
+function playCorrectChime(){
+  playTone(659,120,'sine',0.18);
+  setTimeout(()=>playTone(988,180,'sine',0.18),110);
+}
+function playTimeoutTone(){
+  playTone(330,140,'sine',0.16);
+  setTimeout(()=>playTone(220,220,'sine',0.16),130);
+}
+
+function speak(text,onEnd){
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    if(voiceGender==='male'){ u.rate=0.95; u.pitch=0.78; }
+    else{ u.rate=1.0; u.pitch=1.12; }
+    const v=pickVoice(voiceGender);
+    if(v) u.voice=v;
+    if(onEnd){
+      const estimatedMs=Math.max(1200,text.length*70);
+      const fallback=setTimeout(onEnd,estimatedMs);
+      u.onend=()=>{ clearTimeout(fallback); onEnd(); };
+      u.onerror=()=>{ clearTimeout(fallback); onEnd(); };
+    }
+    window.speechSynthesis.speak(u);
+  }catch(e){ if(onEnd) onEnd(); }
+}
+
+function showTab(t,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+
+function bodyFlash(cb){
+  const f=document.getElementById('bodyFlash');
+  f.style.transition='none';
+  f.style.opacity='1';
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      f.style.transition='opacity 0.25s ease';
+      f.style.opacity='0';
+    });
+  });
+  setTimeout(cb, 80);
+}
+
+function renderQ(){
+  answered=false;
+  clearTimeout(answerTimeout);
+  const q=questions[cur];
+  const total=questions.length;
+  document.getElementById('progFill').style.width=((cur+1)/total*100)+'%';
+  document.getElementById('progLabel').textContent='Question '+(cur+1)+' of '+total;
+  document.getElementById('qText').textContent=(cur+1)+') '+q.q;
+  document.getElementById('quizBody').style.display='flex';
+  document.getElementById('endBody').style.display='none';
+  document.getElementById('revealBar').style.visibility='hidden';
+  document.getElementById('nextBtn').style.display='none';
+  document.getElementById('optsList').innerHTML=q.opts.map((o,i)=>{
+    const l=['A','B','C','D'][i];
+    return`<div class="opt-row" id="opt${l}" onclick="choose('${l}')">
+      <div class="opt-badge" style="background:${badgeCols[i]}">${l}</div>
+      <div class="opt-text">${o}</div>
+    </div>`;
+  }).join('');
+  setTimerWaiting();
+  speak('Question '+(cur+1)+'. '+q.q, startTimer);
+}
+
+function setTimerWaiting(){
+  clearInterval(tInt);
+  const arc=document.getElementById('timerArc');
+  const txt=document.getElementById('timerText');
+  arc.setAttribute('stroke-dashoffset','0');
+  arc.setAttribute('stroke','#9ca3af');
+  txt.textContent='…';
+  txt.setAttribute('fill','#9ca3af');
+}
+
+function startTimer(){
+  clearInterval(tInt);
+  clearTimeout(answerTimeout);
+  tv=5;updateTimer(5,5);
+  playTick();
+  tInt=setInterval(()=>{
+    tv--;updateTimer(tv,5);
+    if(tv>0) playTick();
+    if(tv<=0){clearInterval(tInt);if(!answered)doReveal(null);}
+  },1000);
+  answerTimeout=setTimeout(()=>{ speakAnswer(); },5000);
+}
+
+function updateTimer(v,max){
+  const arc=document.getElementById('timerArc');
+  const txt=document.getElementById('timerText');
+  const c=2*Math.PI*22;
+  arc.setAttribute('stroke-dashoffset',c*(1-Math.max(0,v)/max));
+  const col=v/max>0.6?'#16a34a':v/max>0.3?'#f59e0b':'#ef4444';
+  arc.setAttribute('stroke',col);txt.textContent=Math.max(0,v);txt.setAttribute('fill',col);
+}
+
+function speakAnswer(){
+  const q=questions[cur];
+  const labels=['A','B','C','D'];
+  const correctText=q.opts[labels.indexOf(q.correct)];
+  speak('Answer '+q.correct+'. '+correctText);
+}
+
+function choose(l){
+  if(answered)return;
+  answered=true;clearInterval(tInt);
+  if(l===questions[cur].correct)score++;
+  doReveal(l);
+}
+
+function doReveal(chosen){
+  answered=true;clearInterval(tInt);
+  const q=questions[cur];
+  const labels=['A','B','C','D'];
+  labels.forEach(l=>{
+    const el=document.getElementById('opt'+l);if(!el)return;
+    if(l===q.correct)el.classList.add('correct');
+    else if(l===chosen)el.classList.add('wrong');
+  });
+  if(chosen===null) playTimeoutTone();
+  else if(chosen===q.correct) playCorrectChime();
+  else playTimeoutTone();
+  const bar=document.getElementById('revealBar');
+  bar.textContent='✓ '+q.opts[labels.indexOf(q.correct)];
+  bar.style.visibility='visible';
+  document.getElementById('nextBtn').style.display='block';
+}
+
+function nextQ(){
+  bodyFlash(()=>{
+    cur++;
+    if(cur>=questions.length)showEnd();
+    else renderQ();
+  });
+}
+
+function showEnd(){
+  document.getElementById('quizBody').style.display='none';
+  document.getElementById('endBody').style.display='flex';
+  document.getElementById('progFill').style.width='100%';
+  document.getElementById('progLabel').textContent='Quiz Complete!';
+  const pct=Math.round(score/questions.length*100);
+  const trophies=['😔','🙂','👍','⭐','🔥'];
+  const titles=['Keep trying!','Not bad!','Good job!','Almost perfect!','GENIUS!'];
+  document.getElementById('endTrophy').textContent=pct===100?'🔥':trophies[Math.min(Math.floor(pct/25),4)];
+  document.getElementById('endTitle').textContent=pct===100?'PERFECT SCORE!':titles[Math.min(Math.floor(pct/25),4)];
+  document.getElementById('scoreDisplay').textContent=score+'/'+questions.length;
+  document.getElementById('scoreLabel').textContent=pct+'% correct';
+  document.getElementById('scoreGrid').innerHTML=Array.from({length:questions.length},(_,i)=>`<div class="score-cell ${i<score?'got':'miss'}">${i<score?'✓':'✗'}</div>`).join('');
+  document.getElementById('ctaText').textContent=score===questions.length?'Drop a 🔥 in the comments! Perfect score!':'Comment your score! Can you get 10/10?';
+}
+
+function restart(){cur=0;score=0;renderQ();}
+
+function renderQScroll(){
+  document.getElementById('qScroll').innerHTML=questions.map((q,i)=>`
+    <div class="qrow${i===editIdx?' sel':''}" onclick="selQ(${i})">
+      <span class="qrow-num">${i+1}</span><span class="qrow-txt">${q.q}</span>
+    </div>`).join('');
+}
+
+function selQ(i){editIdx=i;renderQScroll();loadEdit();}
+
+function loadEdit(){
+  const q=questions[editIdx];
+  document.getElementById('eQ').value=q.q;
+  ['A','B','C','D'].forEach((l,i)=>document.getElementById('e'+l).value=q.opts[i]||'');
+  tempCorrect=q.correct;
+  document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('sel',b.dataset.v===tempCorrect));
+}
+
+function setCorrect(v){
+  tempCorrect=v;
+  document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('sel',b.dataset.v===v));
+}
+
+function saveEdit(){
+  questions[editIdx]={q:document.getElementById('eQ').value,opts:['A','B','C','D'].map(l=>document.getElementById('e'+l).value),correct:tempCorrect,fact:questions[editIdx].fact||'Amazing fact!'};
+  renderQScroll();
+  if(cur===editIdx)renderQ();
+}
+
+function addNew(){
+  questions.push({q:'New question',opts:['Option A','Option B','Option C','Option D'],correct:'A',fact:'Fun fact here!'});
+  editIdx=questions.length-1;renderQScroll();loadEdit();
+}
+
+function deleteQ(){
+  if(questions.length<=1)return;
+  questions.splice(editIdx,1);
+  editIdx=Math.min(editIdx,questions.length-1);
+  renderQScroll();loadEdit();
+}
+
+function exportJSON(){
+  const b=new Blob([JSON.stringify(questions,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='quiz-questions.json';a.click();
+}
+
+function exportScript(){
+  const txt=questions.map((q,i)=>`Q${i+1}: ${q.q}\nA: ${q.opts[0]}  B: ${q.opts[1]}  C: ${q.opts[2]}  D: ${q.opts[3]}\n[5 SECOND PAUSE]\nAnswer: ${q.correct} — ${q.opts[['A','B','C','D'].indexOf(q.correct)]}\nFact: ${q.fact}\n`).join('\n');
+  const b=new Blob(['GENERAL KNOWLEDGE QUIZ — VOICE SCRIPT\n\n'+txt],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='quiz-voice-script.txt';a.click();
+}
+
+function exportHTML(){
+  const qJSON = JSON.stringify(questions);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>General Knowledge Quiz</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:Arial,sans-serif;}
+.phone{width:380px;max-width:100vw;height:100vh;background:#f5f5f5;display:flex;flex-direction:column;overflow:hidden;}
+.quiz-header{background:#6B21A8;padding:18px 20px 14px;text-align:center;flex-shrink:0;}
+.voice-select-export{position:fixed;top:8px;right:8px;z-index:50;padding:6px 10px;border-radius:20px;border:1.5px solid #ddd;background:rgba(255,255,255,.95);color:#555;font-size:11px;font-weight:700;cursor:pointer;}
+.quiz-title-txt{font-size:14px;font-weight:800;color:white;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;}
+.prog-bar-wrap{background:rgba(255,255,255,.3);border-radius:10px;height:7px;overflow:hidden;margin-bottom:6px;}
+.prog-bar-fill{height:100%;background:white;border-radius:10px;transition:width .4s;}
+.prog-label-txt{font-size:12px;color:rgba(255,255,255,.9);font-weight:600;}
+.quiz-body{flex:1;background:#f5f5f5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;gap:16px;position:relative;overflow:hidden;}
+.body-flash{position:absolute;inset:0;background:white;opacity:0;pointer-events:none;z-index:10;transition:opacity .12s;}
+.timer-wrap{display:flex;justify-content:center;}
+.timer-svg{width:64px;height:64px;}
+.timer-num{font-size:18px;font-weight:900;fill:#333;text-anchor:middle;dominant-baseline:central;}
+.q-card{background:white;border:2px solid #c8aaee;border-radius:16px;padding:18px 20px;width:100%;text-align:center;}
+.q-text-main{font-size:17px;font-weight:800;color:#111;line-height:1.35;}
+.options-list{display:flex;flex-direction:column;gap:10px;width:100%;}
+.opt-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:50px;background:white;border:1.5px solid #e5e7eb;cursor:pointer;transition:all .18s;}
+.opt-row:hover{border-color:#c8aaee;background:#faf5ff;}
+.opt-badge{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0;}
+.opt-text{font-size:15px;font-weight:600;color:#222;flex:1;}
+.opt-row.correct{background:#ecfdf5;border-color:#10b981;}
+.opt-row.correct .opt-text{color:#065f46;}
+.opt-row.correct .opt-badge{background:#10b981!important;}
+.opt-row.wrong{background:#fef2f2;border-color:#ef4444;}
+.opt-row.wrong .opt-text{color:#991b1b;}
+.reveal-bar{background:#16a34a;border-radius:50px;padding:14px 20px;text-align:center;width:100%;font-size:15px;font-weight:800;color:white;visibility:hidden;}
+.next-btn{background:#6B21A8;border-radius:50px;padding:14px 20px;text-align:center;width:100%;font-size:15px;font-weight:800;color:white;display:none;border:none;cursor:pointer;}
+.end-body{flex:1;background:#f5f5f5;display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px 20px;gap:14px;}
+.end-trophy{font-size:56px;text-align:center;}
+.end-title{font-size:22px;font-weight:900;color:#1a1a1a;text-align:center;}
+.score-display{font-size:60px;font-weight:900;color:#6B21A8;line-height:1;}
+.score-label{font-size:14px;color:#666;font-weight:600;text-align:center;}
+.score-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;width:100%;}
+.score-cell{aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;}
+.score-cell.got{background:#16a34a;color:white;}
+.score-cell.miss{background:#fca5a5;color:#7f1d1d;}
+.cta-box{background:white;border:1.5px solid #e5e7eb;border-radius:14px;padding:14px 18px;text-align:center;width:100%;}
+.cta-box p{font-size:14px;color:#444;line-height:1.5;font-weight:600;}
+.restart-btn{background:#6B21A8;border-radius:50px;padding:13px 28px;color:white;font-size:15px;font-weight:800;border:none;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="quiz-header">
+    <div class="quiz-title-txt">General Knowledge Quiz</div>
+    <div class="prog-bar-wrap"><div class="prog-bar-fill" id="progFill" style="width:10%"></div></div>
+    <div class="prog-label-txt" id="progLabel">Question 1 of 10</div>
+  </div>
+  <select class="voice-select-export" id="voiceSelect" onchange="onVoiceChange()">
+    <option value="female">🔊 Female Voice</option>
+    <option value="male">🔊 Male Voice</option>
+  </select>
+  <div class="quiz-body" id="quizBody">
+    <div class="body-flash" id="bodyFlash"></div>
+    <div class="timer-wrap">
+      <svg class="timer-svg" viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="22" fill="none" stroke="#e5e7eb" stroke-width="4"/>
+        <circle cx="26" cy="26" r="22" fill="none" stroke="#16a34a" stroke-width="4"
+          stroke-dasharray="138.2" stroke-dashoffset="0" stroke-linecap="round"
+          transform="rotate(-90 26 26)" id="timerArc"/>
+        <text x="26" y="26" class="timer-num" id="timerText">5</text>
+      </svg>
+    </div>
+    <div class="q-card"><div class="q-text-main" id="qText"></div></div>
+    <div class="options-list" id="optsList"></div>
+    <div class="reveal-bar" id="revealBar"></div>
+    <button class="next-btn" id="nextBtn" onclick="nextQ()">Next Question →</button>
+  </div>
+  <div class="end-body" id="endBody">
+    <div class="end-trophy" id="endTrophy">🏆</div>
+    <div class="end-title" id="endTitle"></div>
+    <div class="score-display" id="scoreDisplay"></div>
+    <div class="score-label" id="scoreLabel"></div>
+    <div class="score-grid" id="scoreGrid"></div>
+    <div class="cta-box"><p id="ctaText"></p></div>
+    <button class="restart-btn" onclick="restart()">Play Again</button>
+  </div>
+</div>
+<script>
+let questions=${qJSON};
+const badgeCols=["#6B21A8","#6B21A8","#6B21A8","#6B21A8"];
+let cur=0,score=0,tv=5,tInt=null,answered=false,answerTimeout=null;
+let voiceGender='female';
+let availableVoices=[];
+
+function loadVoices(){
+  try{ availableVoices=window.speechSynthesis.getVoices()||[]; }catch(e){ availableVoices=[]; }
+}
+if(typeof window!=='undefined'&&window.speechSynthesis){
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged=loadVoices;
+}
+
+const FEMALE_HINTS=['female','samantha','victoria','zira','susan','karen','moira','tessa','fiona','allison','ava','serena','kathy','princess','flo','sandy','nicky','female 1','female 2','woman','girl','aria','jenny','michelle','emma','olivia','sara','salli','joanna','kendra','kimberly','ivy','amy'];
+const MALE_HINTS=['male','daniel','david','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','guy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher'];
+
+function pickVoice(gender){
+  if(!availableVoices.length) loadVoices();
+  const englishVoices=availableVoices.filter(v=>v.lang&&v.lang.toLowerCase().startsWith('en'));
+  const pool=englishVoices.length?englishVoices:availableVoices;
+  if(!pool.length) return null;
+  const hints=gender==='male'?MALE_HINTS:FEMALE_HINTS;
+  const oppositeHints=gender==='male'?FEMALE_HINTS:MALE_HINTS;
+  const match=pool.find(v=>hints.some(h=>v.name.toLowerCase().includes(h)));
+  if(match) return match;
+  const notOpposite=pool.filter(v=>!oppositeHints.some(h=>v.name.toLowerCase().includes(h)));
+  const candidates=notOpposite.length?notOpposite:pool;
+  if(candidates.length>1){
+    const sorted=[...candidates].sort((a,b)=>a.name.localeCompare(b.name));
+    return gender==='male'?sorted[0]:sorted[sorted.length-1];
+  }
+  return candidates[0]||null;
+}
+
+function onVoiceChange(){
+  voiceGender=document.getElementById('voiceSelect').value;
+  speak(voiceGender==='male'?'This is the male voice':'This is the female voice');
+}
+
+let audioCtx=null;
+function getAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; }
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq,durationMs,type,vol){
+  const ctx=getAudioCtx();
+  if(!ctx) return;
+  const osc=ctx.createOscillator();
+  const gain=ctx.createGain();
+  osc.type=type||'sine';
+  osc.frequency.value=freq;
+  gain.gain.value=vol||0.15;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  const now=ctx.currentTime;
+  gain.gain.setValueAtTime(vol||0.15,now);
+  gain.gain.exponentialRampToValueAtTime(0.001,now+durationMs/1000);
+  osc.start(now);
+  osc.stop(now+durationMs/1000);
+}
+function playTick(){ playTone(880,90,'square',0.08); }
+function playCorrectChime(){
+  playTone(659,120,'sine',0.18);
+  setTimeout(()=>playTone(988,180,'sine',0.18),110);
+}
+function playTimeoutTone(){
+  playTone(330,140,'sine',0.16);
+  setTimeout(()=>playTone(220,220,'sine',0.16),130);
+}
+
+function speak(text,onEnd){
+  try{
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    if(voiceGender==='male'){ u.rate=0.95; u.pitch=0.78; }
+    else{ u.rate=1.0; u.pitch=1.12; }
+    const v=pickVoice(voiceGender);
+    if(v) u.voice=v;
+    if(onEnd){
+      const estimatedMs=Math.max(1200,text.length*70);
+      const fallback=setTimeout(onEnd,estimatedMs);
+      u.onend=()=>{ clearTimeout(fallback); onEnd(); };
+      u.onerror=()=>{ clearTimeout(fallback); onEnd(); };
+    }
+    window.speechSynthesis.speak(u);
+  }catch(e){ if(onEnd) onEnd(); }
+}
+
+function bodyFlash(cb){
+  const f=document.getElementById('bodyFlash');
+  f.style.transition='none';f.style.opacity='1';
+  requestAnimationFrame(()=>{requestAnimationFrame(()=>{f.style.transition='opacity 0.25s ease';f.style.opacity='0';});});
+  setTimeout(cb,80);
+}
+function renderQ(){
+  answered=false;
+  clearTimeout(answerTimeout);
+  const q=questions[cur];const total=questions.length;
+  document.getElementById('progFill').style.width=((cur+1)/total*100)+'%';
+  document.getElementById('progLabel').textContent='Question '+(cur+1)+' of '+total;
+  document.getElementById('qText').textContent=(cur+1)+') '+q.q;
+  document.getElementById('quizBody').style.display='flex';
+  document.getElementById('endBody').style.display='none';
+  document.getElementById('revealBar').style.visibility='hidden';
+  document.getElementById('nextBtn').style.display='none';
+  document.getElementById('optsList').innerHTML=q.opts.map((o,i)=>{
+    const l=['A','B','C','D'][i];
+    return \`<div class="opt-row" id="opt\${l}" onclick="choose('\${l}')">
+      <div class="opt-badge" style="background:\${badgeCols[i]}">\${l}</div>
+      <div class="opt-text">\${o}</div>
+    </div>\`;
+  }).join('');
+  setTimerWaiting();
+  speak('Question '+(cur+1)+'. '+q.q, startTimer);
+}
+function setTimerWaiting(){
+  clearInterval(tInt);
+  const arc=document.getElementById('timerArc');
+  const txt=document.getElementById('timerText');
+  arc.setAttribute('stroke-dashoffset','0');
+  arc.setAttribute('stroke','#9ca3af');
+  txt.textContent='…';
+  txt.setAttribute('fill','#9ca3af');
+}
+function startTimer(){
+  clearInterval(tInt);
+  clearTimeout(answerTimeout);
+  tv=5;updateTimer(5,5);
+  playTick();
+  tInt=setInterval(()=>{
+    tv--;updateTimer(tv,5);
+    if(tv>0) playTick();
+    if(tv<=0){clearInterval(tInt);if(!answered)doReveal(null);}
+  },1000);
+  answerTimeout=setTimeout(()=>{ speakAnswer(); },5000);
+}
+function updateTimer(v,max){
+  const arc=document.getElementById('timerArc');const txt=document.getElementById('timerText');
+  const c=2*Math.PI*22;
+  arc.setAttribute('stroke-dashoffset',c*(1-Math.max(0,v)/max));
+  const col=v/max>0.6?'#16a34a':v/max>0.3?'#f59e0b':'#ef4444';
+  arc.setAttribute('stroke',col);txt.textContent=Math.max(0,v);txt.setAttribute('fill',col);
+}
+function speakAnswer(){
+  const q=questions[cur];
+  const labels=['A','B','C','D'];
+  const correctText=q.opts[labels.indexOf(q.correct)];
+  speak('Answer '+q.correct+'. '+correctText);
+}
+function choose(l){
+  if(answered)return;
+  answered=true;clearInterval(tInt);
+  if(l===questions[cur].correct)score++;
+  doReveal(l);
+}
+function doReveal(chosen){
+  answered=true;clearInterval(tInt);
+  const q=questions[cur];const labels=['A','B','C','D'];
+  labels.forEach(l=>{
+    const el=document.getElementById('opt'+l);if(!el)return;
+    if(l===q.correct)el.classList.add('correct');
+    else if(l===chosen)el.classList.add('wrong');
+  });
+  if(chosen===null) playTimeoutTone();
+  else if(chosen===q.correct) playCorrectChime();
+  else playTimeoutTone();
+  const bar=document.getElementById('revealBar');
+  bar.textContent='✓ '+q.opts[labels.indexOf(q.correct)];
+  bar.style.visibility='visible';
+  document.getElementById('nextBtn').style.display='block';
+}
+function nextQ(){
+  bodyFlash(()=>{cur++;if(cur>=questions.length)showEnd();else renderQ();});
+}
+function showEnd(){
+  document.getElementById('quizBody').style.display='none';
+  document.getElementById('endBody').style.display='flex';
+  document.getElementById('progFill').style.width='100%';
+  document.getElementById('progLabel').textContent='Quiz Complete!';
+  const pct=Math.round(score/questions.length*100);
+  const trophies=['😔','🙂','👍','⭐','🔥'];
+  const titles=['Keep trying!','Not bad!','Good job!','Almost perfect!','GENIUS!'];
+  document.getElementById('endTrophy').textContent=pct===100?'🔥':trophies[Math.min(Math.floor(pct/25),4)];
+  document.getElementById('endTitle').textContent=pct===100?'PERFECT SCORE!':titles[Math.min(Math.floor(pct/25),4)];
+  document.getElementById('scoreDisplay').textContent=score+'/'+questions.length;
+  document.getElementById('scoreLabel').textContent=pct+'% correct';
+  document.getElementById('scoreGrid').innerHTML=Array.from({length:questions.length},(_,i)=>\`<div class="score-cell \${i<score?'got':'miss'}">\${i<score?'✓':'✗'}</div>\`).join('');
+  document.getElementById('ctaText').textContent=score===questions.length?'Drop a 🔥 in the comments! Perfect score!':'Comment your score! Can you get '+questions.length+'/'+questions.length+'?';
+}
+function restart(){cur=0;score=0;renderQ();}
+renderQ();
+<\/script>
+</body>
+</html>`;
+  const b=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='quiz.html';a.click();
+}
+
+renderQScroll();loadEdit();renderQ();
+</script>
+</body>
+</html>
