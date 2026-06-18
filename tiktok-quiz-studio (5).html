@@ -94,8 +94,8 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
     <button class="tab-btn" onclick="showTab('edit',this)">Edit Questions</button>
     <button class="tab-btn" onclick="showTab('export',this)">Export</button>
     <select class="voice-select" id="voiceSelect" onchange="onVoiceChange()">
-      <option value="female">🔊 Female Voice</option>
-      <option value="male">🔊 Male Voice</option>
+      <option value="female">🔊 Clear Female Voice</option>
+      <option value="male">🔊 Clear Male Voice</option>
     </select>
   </div>
 
@@ -236,9 +236,9 @@ if(typeof window!=='undefined'&&window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged=loadVoices;
 }
 
-const NATURAL_VOICE_HINTS=['natural','neural','premium','enhanced','online','google us english','microsoft aria','microsoft jenny','microsoft guy','microsoft davis'];
+const NATURAL_VOICE_HINTS=['natural','neural','premium','enhanced','online','google us english','microsoft','apple','siri','aria','jenny','guy','davis'];
 const FEMALE_HINTS=['female','samantha','victoria','zira','susan','karen','moira','tessa','fiona','allison','ava','serena','kathy','princess','flo','sandy','nicky','female 1','female 2','woman','girl','aria','jenny','michelle','emma','olivia','sara','salli','joanna','kendra','kimberly','ivy','amy','emma'];
-const MALE_HINTS=['male','daniel','david','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','guy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher'];
+const MALE_HINTS=['male','guy','davis','david','mark','daniel','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher','james','george','henry','liam','noah'];
 
 function pickVoice(gender){
   if(!availableVoices.length) loadVoices();
@@ -249,26 +249,31 @@ function pickVoice(gender){
   const oppositeHints=gender==='male'?FEMALE_HINTS:MALE_HINTS;
   const scoreVoice=v=>{
     const name=v.name.toLowerCase();
-    const localBonus=v.localService?0:4;
-    const naturalBonus=NATURAL_VOICE_HINTS.some(h=>name.includes(h))?8:0;
-    const genderBonus=hints.some(h=>name.includes(h))?12:0;
-    const oppositePenalty=oppositeHints.some(h=>name.includes(h))?-10:0;
-    const usBonus=(v.lang||'').toLowerCase().startsWith('en-us')?2:0;
-    return genderBonus+naturalBonus+localBonus+oppositePenalty+usBonus;
+    const lang=(v.lang||'').toLowerCase();
+    const localBonus=v.localService?1:5;
+    const naturalBonus=NATURAL_VOICE_HINTS.some(h=>name.includes(h))?10:0;
+    const genderBonus=hints.some(h=>name.includes(h))?16:0;
+    const oppositePenalty=oppositeHints.some(h=>name.includes(h))?-18:0;
+    const englishBonus=lang.startsWith('en-us')?4:lang.startsWith('en-gb')?3:lang.startsWith('en')?2:0;
+    const defaultPenalty=/compact|novelty|whisper|bad news|bells|boing|bubbles|cellos|hysterical|organ|trinoids|zarvox/.test(name)?-20:0;
+    return genderBonus+naturalBonus+localBonus+oppositePenalty+englishBonus+defaultPenalty;
   };
   return [...pool].sort((a,b)=>scoreVoice(b)-scoreVoice(a)||a.name.localeCompare(b.name))[0]||null;
 }
 
 function humanizeSpeechText(text){
   return String(text)
+    .replace(/\s+/g,' ')
     .replace(/\. /g,'.  ')
     .replace(/\? /g,'?  ')
-    .replace(/Answer ([A-D])\. /,'Answer $1... ');
+    .replace(/! /g,'!  ')
+    .replace(/Answer ([A-D])\. /,'Answer $1... ')
+    .trim();
 }
 
 function onVoiceChange(){
   voiceGender=document.getElementById('voiceSelect').value;
-  speak(voiceGender==='male'?'Here is the warmer male voice.':'Here is the warmer female voice.');
+  speak(voiceGender==='male'?'Clear male voice selected. I will read questions slowly and naturally.':'Clear female voice selected. I will read questions slowly and naturally.');
 }
 
 let audioCtx=null;
@@ -309,11 +314,12 @@ function speak(text,onEnd){
   try{
     window.speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(humanizeSpeechText(text));
-    u.volume=0.96;
-    if(voiceGender==='male'){ u.rate=0.88; u.pitch=0.92; }
-    else{ u.rate=0.9; u.pitch=1.02; }
+    u.volume=1;
+    if(voiceGender==='male'){ u.rate=0.84; u.pitch=0.82; }
+    else{ u.rate=0.88; u.pitch=1.01; }
     const v=pickVoice(voiceGender);
-    if(v) u.voice=v;
+    if(v){ u.voice=v; u.lang=v.lang||'en-US'; }
+    else{ u.lang='en-US'; }
     if(onEnd){
       const estimatedMs=Math.max(1200,text.length*70);
       const fallback=setTimeout(onEnd,estimatedMs);
@@ -567,8 +573,8 @@ body{background:#000;display:flex;justify-content:center;align-items:center;min-
     <div class="prog-label-txt" id="progLabel">Question 1 of 10</div>
   </div>
   <select class="voice-select-export" id="voiceSelect" onchange="onVoiceChange()">
-    <option value="female">🔊 Female Voice</option>
-    <option value="male">🔊 Male Voice</option>
+    <option value="female">🔊 Clear Female Voice</option>
+    <option value="male">🔊 Clear Male Voice</option>
   </select>
   <div class="quiz-body" id="quizBody">
     <div class="body-flash" id="bodyFlash"></div>
@@ -611,9 +617,9 @@ if(typeof window!=='undefined'&&window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged=loadVoices;
 }
 
-const NATURAL_VOICE_HINTS=['natural','neural','premium','enhanced','online','google us english','microsoft aria','microsoft jenny','microsoft guy','microsoft davis'];
+const NATURAL_VOICE_HINTS=['natural','neural','premium','enhanced','online','google us english','microsoft','apple','siri','aria','jenny','guy','davis'];
 const FEMALE_HINTS=['female','samantha','victoria','zira','susan','karen','moira','tessa','fiona','allison','ava','serena','kathy','princess','flo','sandy','nicky','female 1','female 2','woman','girl','aria','jenny','michelle','emma','olivia','sara','salli','joanna','kendra','kimberly','ivy','amy'];
-const MALE_HINTS=['male','daniel','david','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','guy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher'];
+const MALE_HINTS=['male','guy','davis','david','mark','daniel','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher','james','george','henry','liam','noah'];
 
 function pickVoice(gender){
   if(!availableVoices.length) loadVoices();
@@ -624,26 +630,31 @@ function pickVoice(gender){
   const oppositeHints=gender==='male'?FEMALE_HINTS:MALE_HINTS;
   const scoreVoice=v=>{
     const name=v.name.toLowerCase();
-    const localBonus=v.localService?0:4;
-    const naturalBonus=NATURAL_VOICE_HINTS.some(h=>name.includes(h))?8:0;
-    const genderBonus=hints.some(h=>name.includes(h))?12:0;
-    const oppositePenalty=oppositeHints.some(h=>name.includes(h))?-10:0;
-    const usBonus=(v.lang||'').toLowerCase().startsWith('en-us')?2:0;
-    return genderBonus+naturalBonus+localBonus+oppositePenalty+usBonus;
+    const lang=(v.lang||'').toLowerCase();
+    const localBonus=v.localService?1:5;
+    const naturalBonus=NATURAL_VOICE_HINTS.some(h=>name.includes(h))?10:0;
+    const genderBonus=hints.some(h=>name.includes(h))?16:0;
+    const oppositePenalty=oppositeHints.some(h=>name.includes(h))?-18:0;
+    const englishBonus=lang.startsWith('en-us')?4:lang.startsWith('en-gb')?3:lang.startsWith('en')?2:0;
+    const defaultPenalty=/compact|novelty|whisper|bad news|bells|boing|bubbles|cellos|hysterical|organ|trinoids|zarvox/.test(name)?-20:0;
+    return genderBonus+naturalBonus+localBonus+oppositePenalty+englishBonus+defaultPenalty;
   };
   return [...pool].sort((a,b)=>scoreVoice(b)-scoreVoice(a)||a.name.localeCompare(b.name))[0]||null;
 }
 
 function humanizeSpeechText(text){
   return String(text)
+    .replace(/\s+/g,' ')
     .replace(/\. /g,'.  ')
     .replace(/\? /g,'?  ')
-    .replace(/Answer ([A-D])\. /,'Answer $1... ');
+    .replace(/! /g,'!  ')
+    .replace(/Answer ([A-D])\. /,'Answer $1... ')
+    .trim();
 }
 
 function onVoiceChange(){
   voiceGender=document.getElementById('voiceSelect').value;
-  speak(voiceGender==='male'?'Here is the warmer male voice.':'Here is the warmer female voice.');
+  speak(voiceGender==='male'?'Clear male voice selected. I will read questions slowly and naturally.':'Clear female voice selected. I will read questions slowly and naturally.');
 }
 
 let audioCtx=null;
@@ -684,11 +695,12 @@ function speak(text,onEnd){
   try{
     window.speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(humanizeSpeechText(text));
-    u.volume=0.96;
-    if(voiceGender==='male'){ u.rate=0.88; u.pitch=0.92; }
-    else{ u.rate=0.9; u.pitch=1.02; }
+    u.volume=1;
+    if(voiceGender==='male'){ u.rate=0.84; u.pitch=0.82; }
+    else{ u.rate=0.88; u.pitch=1.01; }
     const v=pickVoice(voiceGender);
-    if(v) u.voice=v;
+    if(v){ u.voice=v; u.lang=v.lang||'en-US'; }
+    else{ u.lang='en-US'; }
     if(onEnd){
       const estimatedMs=Math.max(1200,text.length*70);
       const fallback=setTimeout(onEnd,estimatedMs);
