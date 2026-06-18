@@ -236,6 +236,7 @@ if(typeof window!=='undefined'&&window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged=loadVoices;
 }
 
+const NATURAL_VOICE_HINTS=['natural','neural','premium','enhanced','online','google us english','microsoft aria','microsoft jenny','microsoft guy','microsoft davis'];
 const FEMALE_HINTS=['female','samantha','victoria','zira','susan','karen','moira','tessa','fiona','allison','ava','serena','kathy','princess','flo','sandy','nicky','female 1','female 2','woman','girl','aria','jenny','michelle','emma','olivia','sara','salli','joanna','kendra','kimberly','ivy','amy','emma'];
 const MALE_HINTS=['male','daniel','david','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','guy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher'];
 
@@ -246,20 +247,28 @@ function pickVoice(gender){
   if(!pool.length) return null;
   const hints=gender==='male'?MALE_HINTS:FEMALE_HINTS;
   const oppositeHints=gender==='male'?FEMALE_HINTS:MALE_HINTS;
-  const match=pool.find(v=>hints.some(h=>v.name.toLowerCase().includes(h)));
-  if(match) return match;
-  const notOpposite=pool.filter(v=>!oppositeHints.some(h=>v.name.toLowerCase().includes(h)));
-  const candidates=notOpposite.length?notOpposite:pool;
-  if(candidates.length>1){
-    const sorted=[...candidates].sort((a,b)=>a.name.localeCompare(b.name));
-    return gender==='male'?sorted[0]:sorted[sorted.length-1];
-  }
-  return candidates[0]||null;
+  const scoreVoice=v=>{
+    const name=v.name.toLowerCase();
+    const localBonus=v.localService?0:4;
+    const naturalBonus=NATURAL_VOICE_HINTS.some(h=>name.includes(h))?8:0;
+    const genderBonus=hints.some(h=>name.includes(h))?12:0;
+    const oppositePenalty=oppositeHints.some(h=>name.includes(h))?-10:0;
+    const usBonus=(v.lang||'').toLowerCase().startsWith('en-us')?2:0;
+    return genderBonus+naturalBonus+localBonus+oppositePenalty+usBonus;
+  };
+  return [...pool].sort((a,b)=>scoreVoice(b)-scoreVoice(a)||a.name.localeCompare(b.name))[0]||null;
+}
+
+function humanizeSpeechText(text){
+  return String(text)
+    .replace(/\. /g,'.  ')
+    .replace(/\? /g,'?  ')
+    .replace(/Answer ([A-D])\. /,'Answer $1... ');
 }
 
 function onVoiceChange(){
   voiceGender=document.getElementById('voiceSelect').value;
-  speak(voiceGender==='male'?'This is the male voice':'This is the female voice');
+  speak(voiceGender==='male'?'Here is the warmer male voice.':'Here is the warmer female voice.');
 }
 
 let audioCtx=null;
@@ -299,9 +308,10 @@ function playTimeoutTone(){
 function speak(text,onEnd){
   try{
     window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);
-    if(voiceGender==='male'){ u.rate=0.95; u.pitch=0.78; }
-    else{ u.rate=1.0; u.pitch=1.12; }
+    const u=new SpeechSynthesisUtterance(humanizeSpeechText(text));
+    u.volume=0.96;
+    if(voiceGender==='male'){ u.rate=0.88; u.pitch=0.92; }
+    else{ u.rate=0.9; u.pitch=1.02; }
     const v=pickVoice(voiceGender);
     if(v) u.voice=v;
     if(onEnd){
@@ -601,6 +611,7 @@ if(typeof window!=='undefined'&&window.speechSynthesis){
   window.speechSynthesis.onvoiceschanged=loadVoices;
 }
 
+const NATURAL_VOICE_HINTS=['natural','neural','premium','enhanced','online','google us english','microsoft aria','microsoft jenny','microsoft guy','microsoft davis'];
 const FEMALE_HINTS=['female','samantha','victoria','zira','susan','karen','moira','tessa','fiona','allison','ava','serena','kathy','princess','flo','sandy','nicky','female 1','female 2','woman','girl','aria','jenny','michelle','emma','olivia','sara','salli','joanna','kendra','kimberly','ivy','amy'];
 const MALE_HINTS=['male','daniel','david','alex','fred','tom','aaron','arthur','gordon','ralph','rishi','eddy','reed','grandpa','man','boy','guy','male 1','male 2','brian','justin','matthew','joey','eric','russell','will','christopher'];
 
@@ -611,20 +622,28 @@ function pickVoice(gender){
   if(!pool.length) return null;
   const hints=gender==='male'?MALE_HINTS:FEMALE_HINTS;
   const oppositeHints=gender==='male'?FEMALE_HINTS:MALE_HINTS;
-  const match=pool.find(v=>hints.some(h=>v.name.toLowerCase().includes(h)));
-  if(match) return match;
-  const notOpposite=pool.filter(v=>!oppositeHints.some(h=>v.name.toLowerCase().includes(h)));
-  const candidates=notOpposite.length?notOpposite:pool;
-  if(candidates.length>1){
-    const sorted=[...candidates].sort((a,b)=>a.name.localeCompare(b.name));
-    return gender==='male'?sorted[0]:sorted[sorted.length-1];
-  }
-  return candidates[0]||null;
+  const scoreVoice=v=>{
+    const name=v.name.toLowerCase();
+    const localBonus=v.localService?0:4;
+    const naturalBonus=NATURAL_VOICE_HINTS.some(h=>name.includes(h))?8:0;
+    const genderBonus=hints.some(h=>name.includes(h))?12:0;
+    const oppositePenalty=oppositeHints.some(h=>name.includes(h))?-10:0;
+    const usBonus=(v.lang||'').toLowerCase().startsWith('en-us')?2:0;
+    return genderBonus+naturalBonus+localBonus+oppositePenalty+usBonus;
+  };
+  return [...pool].sort((a,b)=>scoreVoice(b)-scoreVoice(a)||a.name.localeCompare(b.name))[0]||null;
+}
+
+function humanizeSpeechText(text){
+  return String(text)
+    .replace(/\. /g,'.  ')
+    .replace(/\? /g,'?  ')
+    .replace(/Answer ([A-D])\. /,'Answer $1... ');
 }
 
 function onVoiceChange(){
   voiceGender=document.getElementById('voiceSelect').value;
-  speak(voiceGender==='male'?'This is the male voice':'This is the female voice');
+  speak(voiceGender==='male'?'Here is the warmer male voice.':'Here is the warmer female voice.');
 }
 
 let audioCtx=null;
@@ -664,9 +683,10 @@ function playTimeoutTone(){
 function speak(text,onEnd){
   try{
     window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);
-    if(voiceGender==='male'){ u.rate=0.95; u.pitch=0.78; }
-    else{ u.rate=1.0; u.pitch=1.12; }
+    const u=new SpeechSynthesisUtterance(humanizeSpeechText(text));
+    u.volume=0.96;
+    if(voiceGender==='male'){ u.rate=0.88; u.pitch=0.92; }
+    else{ u.rate=0.9; u.pitch=1.02; }
     const v=pickVoice(voiceGender);
     if(v) u.voice=v;
     if(onEnd){
