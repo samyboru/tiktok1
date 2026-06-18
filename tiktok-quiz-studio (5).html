@@ -80,6 +80,9 @@
 .exp-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0;}
 .exp-name{font-size:12px;font-weight:700;color:#111;}
 .exp-desc{font-size:10px;color:#888;margin-top:1px;}
+.status-card{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f9fafb;border:1.5px solid #e5e7eb;font-size:11px;color:#555;line-height:1.45;font-weight:600;}
+.status-card strong{color:#111;}
+.import-input{display:none;}
 body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;}
 .studio{max-width:420px;margin:0 auto;width:100%;}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
@@ -161,6 +164,7 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
           <div class="oer"><span class="olbl">D</span><input class="fi" id="eD"/></div>
         </div>
       </div>
+      <div class="fg"><div class="fl">Fun Fact / Reveal Note</div><input class="fi" id="eFact" type="text"/></div>
       <div class="fg">
         <div class="fl">Correct Answer</div>
         <div class="crow">
@@ -174,13 +178,14 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
         <button class="abtn save" onclick="saveEdit()">Save</button>
         <button class="abtn add" onclick="addNew()">+ Add</button>
         <button class="abtn del" onclick="deleteQ()">Delete</button>
+        <button class="abtn add" onclick="restart()">Restart Preview</button>
       </div>
     </div>
   </div>
 
   <div class="panel" id="tab-export">
     <div class="export-panel">
-      <div class="exp-hint">Record your screen while previewing for TikTok. Download your questions or script below.</div>
+      <div class="exp-hint">Export your question bank, standalone quiz, voice script, or record the app into a downloadable video. Use Preview to play, Restart Preview to reset, and Next Question to advance after each reveal.</div>
       <div class="exp-opts">
         <div class="exp-btn" onclick="exportJSON()">
           <div class="exp-ico" style="background:#16a34a;">J</div>
@@ -194,11 +199,25 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
           <div class="exp-ico" style="background:#6B21A8;">H</div>
           <div><div class="exp-name">Download Quiz (HTML)</div><div class="exp-desc">Open fullscreen in browser to record</div></div>
         </div>
+        <div class="exp-btn" onclick="startScreenRecording()">
+          <div class="exp-ico" style="background:#0ea5e9;">●</div>
+          <div><div class="exp-name">Start Screen Video Recording</div><div class="exp-desc">Records the selected browser tab or screen to WebM</div></div>
+        </div>
+        <div class="exp-btn" onclick="stopScreenRecording()">
+          <div class="exp-ico" style="background:#111827;">■</div>
+          <div><div class="exp-name">Stop & Download Video</div><div class="exp-desc">Saves the current recording when finished</div></div>
+        </div>
+        <div class="exp-btn" onclick="document.getElementById('importFile').click()">
+          <div class="exp-ico" style="background:#f59e0b;">I</div>
+          <div><div class="exp-name">Import Questions (JSON)</div><div class="exp-desc">Load a previously exported question bank</div></div>
+        </div>
         <div class="exp-btn" onclick="sendPrompt('Give me 10 brand new TikTok quiz questions on a different topic ↗')">
           <div class="exp-ico" style="background:#BA7517;">+</div>
           <div><div class="exp-name">Generate New Questions ↗</div><div class="exp-desc">Get a fresh set on any topic</div></div>
         </div>
       </div>
+      <input class="import-input" id="importFile" type="file" accept="application/json,.json" onchange="importJSON(event)">
+      <div class="status-card" id="exportStatus"><strong>Status:</strong> Ready.</div>
     </div>
   </div>
 </div>
@@ -275,6 +294,33 @@ function onVoiceChange(){
   voiceGender=document.getElementById('voiceSelect').value;
   speak(voiceGender==='male'?'Clear male voice selected. I will read questions slowly and naturally.':'Clear female voice selected. I will read questions slowly and naturally.');
 }
+
+function setStatus(message){
+  const el=document.getElementById('exportStatus');
+  if(el) el.innerHTML='<strong>Status:</strong> '+message;
+}
+
+function sanitizeQuestion(q){
+  return {
+    q:String(q.q||'Untitled question'),
+    opts:(Array.isArray(q.opts)?q.opts:[]).slice(0,4).concat(['Option A','Option B','Option C','Option D']).slice(0,4).map(String),
+    correct:['A','B','C','D'].includes(q.correct)?q.correct:'A',
+    fact:String(q.fact||'Amazing fact!')
+  };
+}
+
+function syncAfterQuestionChange(resetPreview){
+  questions=questions.map(sanitizeQuestion);
+  if(!questions.length) questions=[sanitizeQuestion({})];
+  editIdx=Math.min(editIdx,questions.length-1);
+  cur=Math.min(cur,questions.length-1);
+  renderQScroll();
+  loadEdit();
+  if(resetPreview) restart();
+  else renderQ();
+}
+
+let mediaRecorder=null,recordedChunks=[],recordStream=null;
 
 let audioCtx=null;
 function getAudioCtx(){
@@ -475,6 +521,7 @@ function selQ(i){editIdx=i;renderQScroll();loadEdit();}
 function loadEdit(){
   const q=questions[editIdx];
   document.getElementById('eQ').value=q.q;
+  document.getElementById('eFact').value=q.fact||'';
   ['A','B','C','D'].forEach((l,i)=>document.getElementById('e'+l).value=q.opts[i]||'');
   tempCorrect=q.correct;
   document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('sel',b.dataset.v===tempCorrect));
@@ -486,32 +533,86 @@ function setCorrect(v){
 }
 
 function saveEdit(){
-  questions[editIdx]={q:document.getElementById('eQ').value,opts:['A','B','C','D'].map(l=>document.getElementById('e'+l).value),correct:tempCorrect,fact:questions[editIdx].fact||'Amazing fact!'};
-  renderQScroll();
-  if(cur===editIdx)renderQ();
+  questions[editIdx]=sanitizeQuestion({q:document.getElementById('eQ').value,opts:['A','B','C','D'].map(l=>document.getElementById('e'+l).value),correct:tempCorrect,fact:document.getElementById('eFact').value});
+  syncAfterQuestionChange(false);
+  setStatus('Question '+(editIdx+1)+' saved.');
 }
 
 function addNew(){
   questions.push({q:'New question',opts:['Option A','Option B','Option C','Option D'],correct:'A',fact:'Fun fact here!'});
-  editIdx=questions.length-1;renderQScroll();loadEdit();
+  editIdx=questions.length-1;syncAfterQuestionChange(false);setStatus('New question added.');
 }
 
 function deleteQ(){
-  if(questions.length<=1)return;
+  if(questions.length<=1){setStatus('Keep at least one question.');return;}
   questions.splice(editIdx,1);
   editIdx=Math.min(editIdx,questions.length-1);
-  renderQScroll();loadEdit();
+  syncAfterQuestionChange(true);
+  setStatus('Question deleted and preview restarted.');
 }
 
 function exportJSON(){
   const b=new Blob([JSON.stringify(questions,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='quiz-questions.json';a.click();
+  setStatus('Questions JSON downloaded.');
 }
 
 function exportScript(){
   const txt=questions.map((q,i)=>`Q${i+1}: ${q.q}\nA: ${q.opts[0]}  B: ${q.opts[1]}  C: ${q.opts[2]}  D: ${q.opts[3]}\n[5 SECOND PAUSE]\nAnswer: ${q.correct} — ${q.opts[['A','B','C','D'].indexOf(q.correct)]}\nFact: ${q.fact}\n`).join('\n');
   const b=new Blob(['GENERAL KNOWLEDGE QUIZ — VOICE SCRIPT\n\n'+txt],{type:'text/plain'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='quiz-voice-script.txt';a.click();
+  setStatus('Voice script downloaded.');
+}
+
+function importJSON(event){
+  const file=event.target.files&&event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(!Array.isArray(data)||!data.length) throw new Error('JSON must be a non-empty array.');
+      questions=data.map(sanitizeQuestion);
+      editIdx=0;cur=0;score=0;
+      syncAfterQuestionChange(true);
+      setStatus('Imported '+questions.length+' questions.');
+    }catch(e){ setStatus('Import failed: '+e.message); }
+    event.target.value='';
+  };
+  reader.readAsText(file);
+}
+
+async function startScreenRecording(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+    setStatus('Screen recording is not supported in this browser.');
+    return;
+  }
+  if(mediaRecorder&&mediaRecorder.state==='recording'){setStatus('Recording is already running.');return;}
+  try{
+    recordedChunks=[];
+    recordStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:30},audio:true});
+    mediaRecorder=new MediaRecorder(recordStream,{mimeType:MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm'});
+    mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size)recordedChunks.push(e.data);};
+    mediaRecorder.onstop=downloadRecording;
+    mediaRecorder.start();
+    setStatus('Recording... choose this browser tab or screen, then play the preview.');
+  }catch(e){ setStatus('Recording cancelled or failed: '+e.message); }
+}
+
+function stopScreenRecording(){
+  if(!mediaRecorder||mediaRecorder.state!=='recording'){setStatus('No active recording to stop.');return;}
+  mediaRecorder.stop();
+  if(recordStream) recordStream.getTracks().forEach(t=>t.stop());
+}
+
+function downloadRecording(){
+  if(!recordedChunks.length){setStatus('Recording stopped, but no video data was captured.');return;}
+  const b=new Blob(recordedChunks,{type:'video/webm'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download='tiktok-quiz-recording.webm';
+  a.click();
+  setStatus('Video recording downloaded as WebM.');
 }
 
 function exportHTML(){
@@ -656,7 +757,6 @@ function onVoiceChange(){
   voiceGender=document.getElementById('voiceSelect').value;
   speak(voiceGender==='male'?'Clear male voice selected. I will read questions slowly and naturally.':'Clear female voice selected. I will read questions slowly and naturally.');
 }
-
 let audioCtx=null;
 function getAudioCtx(){
   if(!audioCtx){
@@ -819,6 +919,7 @@ renderQ();
 </html>`;
   const b=new Blob([html],{type:'text/html'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='quiz.html';a.click();
+  setStatus('Standalone quiz HTML downloaded.');
 }
 
 renderQScroll();loadEdit();renderQ();
