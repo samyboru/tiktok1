@@ -83,6 +83,27 @@
 .status-card{margin-top:10px;padding:10px 12px;border-radius:10px;background:#f9fafb;border:1.5px solid #e5e7eb;font-size:11px;color:#555;line-height:1.45;font-weight:600;}
 .status-card strong{color:#111;}
 .import-input{display:none;}
+
+.bulk-panel{background:white;border-radius:12px;padding:12px;border:1px solid #e5e7eb;}
+.bulk-format-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.bulk-format{padding:7px 10px;border-radius:18px;border:1.5px solid #e5e7eb;background:#fff;color:#555;font-size:10px;font-weight:800;cursor:pointer;}
+.bulk-format.sel{background:#6B21A8;border-color:#6B21A8;color:#fff;}
+.bulk-textarea{width:100%;min-height:150px;resize:vertical;background:white;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px;color:#111;font-size:11px;font-family:Arial,Helvetica,sans-serif;line-height:1.45;}
+.bulk-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.bulk-preview{margin-top:10px;display:none;}
+.bulk-summary{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;}
+.bulk-metric{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px;font-size:10px;color:#555;font-weight:700;}
+.bulk-metric strong{display:block;color:#111;font-size:16px;}
+.bulk-table-wrap{max-height:260px;overflow:auto;border:1px solid #e5e7eb;border-radius:10px;}
+.bulk-table{width:100%;border-collapse:collapse;font-size:10px;min-width:620px;}
+.bulk-table th,.bulk-table td{border-bottom:1px solid #e5e7eb;padding:6px;vertical-align:top;text-align:left;}
+.bulk-table th{background:#f9fafb;color:#555;font-size:9px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;}
+.bulk-table tr.invalid{background:#fff1f2;}
+.bulk-table tr.skipped{opacity:.48;text-decoration:line-through;}
+.bulk-edit{width:100%;min-width:70px;border:1px solid #ddd;border-radius:6px;padding:5px;font-size:10px;}
+.bulk-errors{color:#b91c1c;font-weight:700;line-height:1.35;}
+.bulk-skip{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:#555;}
+.format-help{font-size:10px;color:#777;line-height:1.5;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:8px;}
 body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;justify-content:center;}
 .studio{max-width:420px;margin:0 auto;width:100%;}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
@@ -95,6 +116,7 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
   <div class="top-bar">
     <button class="tab-btn active" onclick="showTab('preview',this)">Preview</button>
     <button class="tab-btn" onclick="showTab('edit',this)">Edit Questions</button>
+    <button class="tab-btn" onclick="showTab('bulk',this)">Bulk Import</button>
     <button class="tab-btn" onclick="showTab('export',this)">Export</button>
     <select class="voice-select" id="voiceSelect" onchange="onVoiceChange()">
       <option value="female">🔊 Clear Female Voice</option>
@@ -179,6 +201,37 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
         <button class="abtn add" onclick="addNew()">+ Add</button>
         <button class="abtn del" onclick="deleteQ()">Delete</button>
         <button class="abtn add" onclick="restart()">Restart Preview</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="panel" id="tab-bulk">
+    <div class="bulk-panel">
+      <div class="ep-lbl">Bulk Import</div>
+      <div class="format-help" id="bulkHelp">Paste a JSON array with q, opts, correct, and fact fields. You can also switch to CSV or quick multiline entry.</div>
+      <div class="bulk-format-row">
+        <button class="bulk-format sel" data-format="json" onclick="setBulkFormat('json')">JSON Array</button>
+        <button class="bulk-format" data-format="csv" onclick="setBulkFormat('csv')">CSV</button>
+        <button class="bulk-format" data-format="multiline" onclick="setBulkFormat('multiline')">Multiline Paste</button>
+      </div>
+      <textarea class="bulk-textarea" id="bulkInput" spellcheck="false"></textarea>
+      <input class="import-input" id="bulkFile" type="file" accept="application/json,.json,text/csv,.csv,text/plain,.txt" onchange="importBulkFile(event)">
+      <div class="bulk-actions">
+        <button class="abtn save" onclick="parseBulkInput()">Preview Import</button>
+        <button class="abtn add" onclick="document.getElementById('bulkFile').click()">Load File</button>
+        <button class="abtn add" onclick="loadBulkExample()">Use Example</button>
+        <button class="abtn del" onclick="clearBulkImport()">Clear</button>
+      </div>
+      <div class="bulk-preview" id="bulkPreview">
+        <div class="ep-lbl" style="margin-top:10px;">Preview & Fix Rows</div>
+        <div class="bulk-summary" id="bulkSummary"></div>
+        <div class="bulk-table-wrap"><table class="bulk-table" id="bulkTable"></table></div>
+        <div class="bulk-actions">
+          <button class="abtn save" onclick="saveBulkImport()">Save Valid Rows</button>
+          <button class="abtn add" onclick="refreshBulkPreviewFromEdits()">Revalidate Edits</button>
+          <button class="abtn del" onclick="skipInvalidRows()">Skip Invalid Rows</button>
+        </div>
       </div>
     </div>
   </div>
@@ -580,6 +633,223 @@ function importJSON(event){
     event.target.value='';
   };
   reader.readAsText(file);
+}
+
+
+let bulkFormat='json';
+let bulkRows=[];
+let bulkLastSummary={total:0,inserted:0,skipped:0,errors:[]};
+
+const BULK_HELP={
+  json:'Paste a JSON array. Each object should use q, opts, correct, and fact. opts must contain four answers and correct must be A, B, C, or D.',
+  csv:'Paste CSV with columns: question, option_a, option_b, option_c, option_d, correct_answer, fact. Quoted commas are supported.',
+  multiline:'Quick entry format: one question per block. Use lines for Q:, A:, B:, C:, D:, Correct:, and Fact:. Separate blocks with a blank line.'
+};
+
+const BULK_EXAMPLES={
+  json:`[
+  {"q":"Which app popularized short vertical videos?","opts":["TikTok","Pinterest","LinkedIn","Maps"],"correct":"A","fact":"Short vertical videos became a defining social format."}
+]`,
+  csv:`question,option_a,option_b,option_c,option_d,correct_answer,fact
+Which color is made by mixing red and blue?,Red,Green,Purple,Yellow,C,"Purple combines red and blue."`,
+  multiline:`Q: What do bees make?
+A: Milk
+B: Honey
+C: Bread
+D: Salt
+Correct: B
+Fact: Honey bees turn nectar into honey.`
+};
+
+function setBulkFormat(format){
+  bulkFormat=format;
+  document.querySelectorAll('.bulk-format').forEach(b=>b.classList.toggle('sel',b.dataset.format===format));
+  document.getElementById('bulkHelp').textContent=BULK_HELP[format];
+  setStatus('Bulk import format set to '+format.toUpperCase()+'.');
+}
+
+function loadBulkExample(){
+  document.getElementById('bulkInput').value=BULK_EXAMPLES[bulkFormat];
+  parseBulkInput();
+}
+
+function clearBulkImport(){
+  document.getElementById('bulkInput').value='';
+  bulkRows=[];
+  document.getElementById('bulkPreview').style.display='none';
+  setStatus('Bulk import cleared.');
+}
+
+function importBulkFile(event){
+  const file=event.target.files&&event.target.files[0];
+  if(!file)return;
+  const name=file.name.toLowerCase();
+  if(name.endsWith('.csv')) setBulkFormat('csv');
+  else if(name.endsWith('.txt')) setBulkFormat('multiline');
+  else setBulkFormat('json');
+  const reader=new FileReader();
+  reader.onload=()=>{
+    document.getElementById('bulkInput').value=reader.result;
+    parseBulkInput();
+    event.target.value='';
+  };
+  reader.readAsText(file);
+}
+
+function normalizeCorrect(value){
+  const v=String(value||'').trim();
+  const upper=v.toUpperCase();
+  if(['A','B','C','D'].includes(upper)) return upper;
+  const n=parseInt(v,10);
+  if(n>=1&&n<=4) return ['A','B','C','D'][n-1];
+  return upper;
+}
+
+function validateBulkRow(raw,index){
+  const row={
+    sourceIndex:index+1,
+    q:String(raw.q||raw.question||'').trim(),
+    opts:[raw.opts&&raw.opts[0],raw.opts&&raw.opts[1],raw.opts&&raw.opts[2],raw.opts&&raw.opts[3]].map(v=>String(v||'').trim()),
+    correct:normalizeCorrect(raw.correct||raw.correct_answer),
+    fact:String(raw.fact||'').trim(),
+    skip:false,
+    errors:[]
+  };
+  if(!row.opts.some(Boolean)) row.opts=['option_a','option_b','option_c','option_d'].map(k=>String(raw[k]||'').trim());
+  if(!row.q) row.errors.push('Missing question');
+  row.opts.forEach((opt,i)=>{ if(!opt) row.errors.push('Missing option '+['A','B','C','D'][i]); });
+  if(!['A','B','C','D'].includes(row.correct)) row.errors.push('Correct answer must be A, B, C, or D');
+  if(!row.fact) row.errors.push('Missing fact');
+  return row;
+}
+
+function parseBulkInput(){
+  const text=document.getElementById('bulkInput').value.trim();
+  if(!text){ setStatus('Paste or load questions before previewing.'); return; }
+  try{
+    let rawRows=[];
+    if(bulkFormat==='json') rawRows=parseJSONBulk(text);
+    if(bulkFormat==='csv') rawRows=parseCSVBulk(text);
+    if(bulkFormat==='multiline') rawRows=parseMultilineBulk(text);
+    bulkRows=rawRows.map(validateBulkRow);
+    renderBulkPreview();
+    setStatus('Preview ready with '+bulkRows.length+' parsed rows. Fix or skip highlighted rows before saving.');
+  }catch(e){
+    bulkRows=[];
+    document.getElementById('bulkPreview').style.display='none';
+    setStatus('Bulk parse failed: '+e.message);
+  }
+}
+
+function parseJSONBulk(text){
+  const data=JSON.parse(text);
+  if(!Array.isArray(data)||!data.length) throw new Error('JSON must be a non-empty array.');
+  return data;
+}
+
+function parseCSVLine(line){
+  const cells=[];let cur='',quoted=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'&&quoted&&line[i+1]==='"'){cur+='"';i++;}
+    else if(ch==='"'){quoted=!quoted;}
+    else if(ch===','&&!quoted){cells.push(cur);cur='';}
+    else cur+=ch;
+  }
+  cells.push(cur);
+  return cells.map(c=>c.trim());
+}
+
+function parseCSVBulk(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2) throw new Error('CSV needs a header row and at least one data row.');
+  const headers=parseCSVLine(lines[0]).map(h=>h.trim().toLowerCase());
+  const required=['question','option_a','option_b','option_c','option_d','correct_answer','fact'];
+  const missing=required.filter(h=>!headers.includes(h));
+  if(missing.length) throw new Error('Missing CSV columns: '+missing.join(', '));
+  return lines.slice(1).map(line=>{
+    const cells=parseCSVLine(line);
+    const obj={};headers.forEach((h,i)=>obj[h]=cells[i]||'');
+    return obj;
+  });
+}
+
+function parseMultilineBulk(text){
+  const blocks=text.split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean);
+  if(!blocks.length) throw new Error('No multiline question blocks found.');
+  return blocks.map(block=>{
+    const obj={opts:[]};
+    block.split(/\r?\n/).forEach(line=>{
+      const m=line.match(/^\s*(Q|Question|A|B|C|D|Correct|Answer|Fact)\s*[:\-) ]\s*(.*)$/i);
+      if(!m) return;
+      const key=m[1].toLowerCase();
+      const val=m[2].trim();
+      if(key==='q'||key==='question') obj.q=val;
+      else if(['a','b','c','d'].includes(key)) obj.opts[['a','b','c','d'].indexOf(key)]=val;
+      else if(key==='correct'||key==='answer') obj.correct=val;
+      else if(key==='fact') obj.fact=val;
+    });
+    return obj;
+  });
+}
+
+function renderBulkPreview(){
+  document.getElementById('bulkPreview').style.display='block';
+  const valid=bulkRows.filter(r=>!r.skip&&!r.errors.length).length;
+  const skipped=bulkRows.filter(r=>r.skip).length;
+  const invalid=bulkRows.filter(r=>!r.skip&&r.errors.length).length;
+  document.getElementById('bulkSummary').innerHTML=`<div class="bulk-metric"><strong>${bulkRows.length}</strong>Total rows found</div><div class="bulk-metric"><strong>${valid}</strong>Ready to insert</div><div class="bulk-metric"><strong>${skipped}</strong>Rows skipped</div><div class="bulk-metric"><strong>${invalid}</strong>Validation errors</div>`;
+  document.getElementById('bulkTable').innerHTML='<thead><tr><th>Skip</th><th>#</th><th>Question</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Correct</th><th>Fact</th><th>Errors</th></tr></thead><tbody>'+bulkRows.map((r,i)=>`<tr class="${r.skip?'skipped':r.errors.length?'invalid':''}">
+    <td><label class="bulk-skip"><input type="checkbox" ${r.skip?'checked':''} onchange="setBulkSkip(${i},this.checked)">Skip</label></td>
+    <td>${r.sourceIndex}</td>
+    <td><textarea class="bulk-edit" data-row="${i}" data-field="q">${escapeHTML(r.q)}</textarea></td>
+    ${[0,1,2,3].map(n=>`<td><input class="bulk-edit" data-row="${i}" data-field="opt${n}" value="${escapeAttr(r.opts[n])}"></td>`).join('')}
+    <td><input class="bulk-edit" data-row="${i}" data-field="correct" value="${escapeAttr(r.correct)}"></td>
+    <td><textarea class="bulk-edit" data-row="${i}" data-field="fact">${escapeHTML(r.fact)}</textarea></td>
+    <td class="bulk-errors">${r.errors.map(escapeHTML).join('<br>')||'✓'}</td>
+  </tr>`).join('')+'</tbody>';
+}
+
+function escapeHTML(v){return String(v).replace(/[&<>]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));}
+function escapeAttr(v){return escapeHTML(v).replace(/"/g,'&quot;');}
+
+function setBulkSkip(index,skip){ bulkRows[index].skip=skip; renderBulkPreview(); }
+
+function refreshBulkPreviewFromEdits(){
+  const edited=bulkRows.map(r=>({q:r.q,opts:[...r.opts],correct:r.correct,fact:r.fact,skip:r.skip}));
+  document.querySelectorAll('.bulk-edit').forEach(el=>{
+    const row=edited[Number(el.dataset.row)];
+    const field=el.dataset.field;
+    if(!row) return;
+    if(field==='q'||field==='fact'||field==='correct') row[field]=el.value;
+    if(field&&field.startsWith('opt')) row.opts[Number(field.replace('opt',''))]=el.value;
+  });
+  bulkRows=edited.map((r,i)=>{const next=validateBulkRow(r,i);next.skip=r.skip;return next;});
+  renderBulkPreview();
+  setStatus('Bulk preview revalidated.');
+}
+
+function skipInvalidRows(){
+  refreshBulkPreviewFromEdits();
+  bulkRows.forEach(r=>{ if(r.errors.length) r.skip=true; });
+  renderBulkPreview();
+  setStatus('Invalid rows marked to skip.');
+}
+
+function saveBulkImport(){
+  refreshBulkPreviewFromEdits();
+  const valid=bulkRows.filter(r=>!r.skip&&!r.errors.length);
+  const invalid=bulkRows.filter(r=>!r.skip&&r.errors.length);
+  if(invalid.length){ setStatus('Fix or skip '+invalid.length+' invalid rows before saving.'); return; }
+  if(!valid.length){ setStatus('No valid rows to save.'); return; }
+  const inserted=valid.map(r=>sanitizeQuestion({q:r.q,opts:r.opts,correct:r.correct,fact:r.fact}));
+  questions=questions.concat(inserted);
+  editIdx=questions.length-inserted.length;
+  syncAfterQuestionChange(true);
+  const skipped=bulkRows.length-valid.length;
+  bulkLastSummary={total:bulkRows.length,inserted:inserted.length,skipped,errors:bulkRows.flatMap(r=>r.errors)};
+  setStatus(`Import complete. Total rows found: ${bulkLastSummary.total}. Rows inserted: ${bulkLastSummary.inserted}. Rows skipped: ${bulkLastSummary.skipped}. Validation errors: ${bulkLastSummary.errors.length}.`);
+  renderBulkPreview();
 }
 
 async function startScreenRecording(){
