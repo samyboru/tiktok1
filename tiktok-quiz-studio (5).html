@@ -58,6 +58,7 @@
 .qrow.sel{border-color:#6B21A8;background:#faf5ff;}
 .qrow-num{font-size:10px;font-weight:800;color:#6B21A8;min-width:16px;}
 .qrow-txt{font-size:11px;color:#333;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.search-input{width:100%;background:white;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 9px;color:#111;font-size:12px;font-family:Arial;margin-bottom:8px;}
 .fg{margin-bottom:8px;}
 .fl{font-size:10px;color:#666;font-weight:700;margin-bottom:3px;text-transform:uppercase;}
 .fi{width:100%;background:white;border:1.5px solid #e5e7eb;border-radius:8px;padding:7px 9px;color:#111;font-size:12px;font-family:Arial;}
@@ -175,6 +176,7 @@ body{background:#f0f0f0;font-family:Arial,Helvetica,sans-serif;display:flex;just
   <div class="panel" id="tab-edit">
     <div class="edit-panel">
       <div class="ep-lbl">Questions</div>
+      <input class="search-input" id="questionSearch" type="search" placeholder="Search saved questions..." oninput="searchQuestions(this.value)"/>
       <div class="q-scroll" id="qScroll"></div>
       <div class="fg"><div class="fl">Question</div><input class="fi" id="eQ" type="text"/></div>
       <div class="fg">
@@ -281,7 +283,7 @@ function sendPrompt(text){
 }
 </script>
 <script>
-let questions=[
+const DEFAULT_QUESTIONS=[
   {q:"What is the fastest animal on land?",opts:["Lion","Cheetah","Horse","Eagle"],correct:"B",fact:"Cheetahs sprint at up to 112 km/h — faster than a car on a city road!"},
   {q:"How many continents are there on Earth?",opts:["5","6","7","8"],correct:"C",fact:"7 continents: Africa, Antarctica, Asia, Australia, Europe, North & South America!"},
   {q:"What is the chemical symbol for water?",opts:["CO2","H2O","O2","NaCl"],correct:"B",fact:"H2O means 2 hydrogen atoms bonded to 1 oxygen atom!"},
@@ -293,6 +295,8 @@ let questions=[
   {q:"What year did World War II end?",opts:["1943","1944","1945","1946"],correct:"C",fact:"WWII ended in 1945 — V-E Day May 8, V-J Day Sep 2!"},
   {q:"What is the largest ocean on Earth?",opts:["Atlantic","Indian","Arctic","Pacific"],correct:"D",fact:"The Pacific Ocean covers more area than all of Earth's land combined!"}
 ];
+let questions=[];
+let questionSearchTerm='';
 
 const badgeCols=["#6B21A8","#6B21A8","#6B21A8","#6B21A8"];
 let cur=0,score=0,tv=5,tInt=null,answered=false,editIdx=0,tempCorrect="A";
@@ -355,11 +359,127 @@ function setStatus(message){
 
 function sanitizeQuestion(q){
   return {
-    q:String(q.q||'Untitled question'),
-    opts:(Array.isArray(q.opts)?q.opts:[]).slice(0,4).concat(['Option A','Option B','Option C','Option D']).slice(0,4).map(String),
-    correct:['A','B','C','D'].includes(q.correct)?q.correct:'A',
-    fact:String(q.fact||'Amazing fact!')
+    id:q.id,
+    q:String(q.q||q.question||'Untitled question'),
+    opts:(Array.isArray(q.opts)?q.opts:[q.optionA,q.optionB,q.optionC,q.optionD]).slice(0,4).concat(['Option A','Option B','Option C','Option D']).slice(0,4).map(String),
+    correct:['A','B','C','D'].includes(q.correct||q.correctAnswer)?q.correct||q.correctAnswer:'A',
+    fact:String(q.fact||'Amazing fact!'),
+    category:q.category,
+    createdAt:q.createdAt,
+    updatedAt:q.updatedAt
   };
+}
+
+
+const QUESTION_DB_NAME='tiktokQuizStudioDB';
+const QUESTION_DB_VERSION=1;
+const QUESTION_STORE='questions';
+let questionDbPromise=null;
+
+function openQuestionDB(){
+  if(questionDbPromise) return questionDbPromise;
+  questionDbPromise=new Promise((resolve,reject)=>{
+    const req=indexedDB.open(QUESTION_DB_NAME,QUESTION_DB_VERSION);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(QUESTION_STORE)){
+        const store=db.createObjectStore(QUESTION_STORE,{keyPath:'id'});
+        store.createIndex('updatedAt','updatedAt',{unique:false});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+  return questionDbPromise;
+}
+
+function txStore(db,mode='readonly'){return db.transaction(QUESTION_STORE,mode).objectStore(QUESTION_STORE);}
+function promisifyRequest(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+function txDone(tx){return new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+function makeQuestionId(){return 'q_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);}
+
+function toQuestionModel(q,existing){
+  const clean=sanitizeQuestion(q);
+  const now=new Date().toISOString();
+  return {
+    id:q.id||existing&&existing.id||makeQuestionId(),
+    question:clean.q,
+    optionA:clean.opts[0],
+    optionB:clean.opts[1],
+    optionC:clean.opts[2],
+    optionD:clean.opts[3],
+    correctAnswer:clean.correct,
+    fact:clean.fact,
+    category:String(q.category||existing&&existing.category||'General Knowledge'),
+    createdAt:q.createdAt||existing&&existing.createdAt||now,
+    updatedAt:now
+  };
+}
+
+function fromQuestionModel(row){
+  return {id:row.id,q:row.question,opts:[row.optionA,row.optionB,row.optionC,row.optionD],correct:row.correctAnswer,fact:row.fact,category:row.category,createdAt:row.createdAt,updatedAt:row.updatedAt};
+}
+
+const questionRepository={
+  async list(searchTerm=''){
+    const db=await openQuestionDB();
+    const rows=await promisifyRequest(txStore(db).getAll());
+    const term=searchTerm.trim().toLowerCase();
+    return rows
+      .sort((a,b)=>a.createdAt.localeCompare(b.createdAt))
+      .filter(row=>!term||[row.question,row.optionA,row.optionB,row.optionC,row.optionD,row.fact,row.category].some(v=>String(v||'').toLowerCase().includes(term)))
+      .map(fromQuestionModel);
+  },
+  async get(id){const db=await openQuestionDB();return promisifyRequest(txStore(db).get(id));},
+  async insertMany(items){
+    const db=await openQuestionDB();
+    const tx=db.transaction(QUESTION_STORE,'readwrite');
+    const store=tx.objectStore(QUESTION_STORE);
+    items.map(item=>toQuestionModel(item)).forEach(model=>store.put(model));
+    await txDone(tx);
+  },
+  async save(item){
+    const db=await openQuestionDB();
+    const existing=item.id?await promisifyRequest(txStore(db).get(item.id)):null;
+    await promisifyRequest(txStore(db,'readwrite').put(toQuestionModel(item,existing)));
+  },
+  async delete(id){const db=await openQuestionDB();await promisifyRequest(txStore(db,'readwrite').delete(id));},
+  async replaceAll(items){
+    const db=await openQuestionDB();
+    const tx=db.transaction(QUESTION_STORE,'readwrite');
+    const store=tx.objectStore(QUESTION_STORE);
+    store.clear();
+    items.map(item=>toQuestionModel(item)).forEach(model=>store.put(model));
+    await txDone(tx);
+  },
+  async seedIfEmpty(){
+    const db=await openQuestionDB();
+    const count=await promisifyRequest(txStore(db).count());
+    if(!count) await this.insertMany(DEFAULT_QUESTIONS);
+  }
+};
+
+async function loadQuestionsFromRepository(searchTerm=questionSearchTerm){
+  questions=await questionRepository.list(searchTerm);
+  if(!questions.length&&searchTerm){
+    editIdx=0;renderQScroll();setStatus('No saved questions match your search.');return;
+  }
+  if(!questions.length){
+    await questionRepository.seedIfEmpty();
+    questions=await questionRepository.list(searchTerm);
+  }
+  editIdx=Math.min(editIdx,questions.length-1);
+  cur=Math.min(cur,questions.length-1);
+  renderQScroll();loadEdit();renderQ();
+}
+
+async function searchQuestions(term){questionSearchTerm=term;editIdx=0;await loadQuestionsFromRepository(term);}
+
+async function initializeQuestionStorage(){
+  if(!('indexedDB' in window)){questions=DEFAULT_QUESTIONS.map(sanitizeQuestion);syncAfterQuestionChange(true);setStatus('IndexedDB unavailable; using this session only.');return;}
+  await questionRepository.seedIfEmpty();
+  await loadQuestionsFromRepository();
+  setStatus('Loaded '+questions.length+' stored questions from IndexedDB.');
 }
 
 function syncAfterQuestionChange(resetPreview){
@@ -450,6 +570,7 @@ function bodyFlash(cb){
 }
 
 function renderQ(){
+  if(!questions.length) return;
   answered=false;
   clearTimeout(answerTimeout);
   const q=questions[cur];
@@ -563,16 +684,17 @@ function showEnd(){
 function restart(){cur=0;score=0;renderQ();}
 
 function renderQScroll(){
-  document.getElementById('qScroll').innerHTML=questions.map((q,i)=>`
+  document.getElementById('qScroll').innerHTML=questions.length?questions.map((q,i)=>`
     <div class="qrow${i===editIdx?' sel':''}" onclick="selQ(${i})">
       <span class="qrow-num">${i+1}</span><span class="qrow-txt">${q.q}</span>
-    </div>`).join('');
+    </div>`).join(''):'<div class="qrow"><span class="qrow-txt">No questions found.</span></div>';
 }
 
 function selQ(i){editIdx=i;renderQScroll();loadEdit();}
 
 function loadEdit(){
   const q=questions[editIdx];
+  if(!q) return;
   document.getElementById('eQ').value=q.q;
   document.getElementById('eFact').value=q.fact||'';
   ['A','B','C','D'].forEach((l,i)=>document.getElementById('e'+l).value=q.opts[i]||'');
@@ -585,23 +707,29 @@ function setCorrect(v){
   document.querySelectorAll('.cbtn').forEach(b=>b.classList.toggle('sel',b.dataset.v===v));
 }
 
-function saveEdit(){
-  questions[editIdx]=sanitizeQuestion({q:document.getElementById('eQ').value,opts:['A','B','C','D'].map(l=>document.getElementById('e'+l).value),correct:tempCorrect,fact:document.getElementById('eFact').value});
-  syncAfterQuestionChange(false);
-  setStatus('Question '+(editIdx+1)+' saved.');
+async function saveEdit(){
+  const existing=questions[editIdx]||{};
+  const next={...existing,q:document.getElementById('eQ').value,opts:['A','B','C','D'].map(l=>document.getElementById('e'+l).value),correct:tempCorrect,fact:document.getElementById('eFact').value};
+  await questionRepository.save(next);
+  await loadQuestionsFromRepository();
+  setStatus('Question '+(editIdx+1)+' saved to IndexedDB.');
 }
 
-function addNew(){
-  questions.push({q:'New question',opts:['Option A','Option B','Option C','Option D'],correct:'A',fact:'Fun fact here!'});
-  editIdx=questions.length-1;syncAfterQuestionChange(false);setStatus('New question added.');
+async function addNew(){
+  await questionRepository.save({q:'New question',opts:['Option A','Option B','Option C','Option D'],correct:'A',fact:'Fun fact here!',category:'General Knowledge'});
+  await loadQuestionsFromRepository();
+  editIdx=questions.length-1;renderQScroll();loadEdit();setStatus('New question added to IndexedDB.');
 }
 
-function deleteQ(){
-  if(questions.length<=1){setStatus('Keep at least one question.');return;}
-  questions.splice(editIdx,1);
-  editIdx=Math.min(editIdx,questions.length-1);
-  syncAfterQuestionChange(true);
-  setStatus('Question deleted and preview restarted.');
+async function deleteQ(){
+  if(questions.length<=1&&!questionSearchTerm){setStatus('Keep at least one question.');return;}
+  const q=questions[editIdx];
+  if(!q){setStatus('No selected question to delete.');return;}
+  await questionRepository.delete(q.id);
+  editIdx=Math.max(0,editIdx-1);
+  await loadQuestionsFromRepository();
+  restart();
+  setStatus('Question deleted from IndexedDB and preview restarted.');
 }
 
 function exportJSON(){
@@ -625,10 +753,12 @@ function importJSON(event){
     try{
       const data=JSON.parse(reader.result);
       if(!Array.isArray(data)||!data.length) throw new Error('JSON must be a non-empty array.');
-      questions=data.map(sanitizeQuestion);
-      editIdx=0;cur=0;score=0;
-      syncAfterQuestionChange(true);
-      setStatus('Imported '+questions.length+' questions.');
+      questionRepository.replaceAll(data.map(sanitizeQuestion)).then(async()=>{
+        editIdx=0;cur=0;score=0;questionSearchTerm='';
+        const search=document.getElementById('questionSearch'); if(search) search.value='';
+        await loadQuestionsFromRepository();
+        setStatus('Imported '+data.length+' questions into IndexedDB.');
+      }).catch(e=>setStatus('Import failed: '+e.message));
     }catch(e){ setStatus('Import failed: '+e.message); }
     event.target.value='';
   };
@@ -836,15 +966,18 @@ function skipInvalidRows(){
   setStatus('Invalid rows marked to skip.');
 }
 
-function saveBulkImport(){
+async function saveBulkImport(){
   refreshBulkPreviewFromEdits();
   const valid=bulkRows.filter(r=>!r.skip&&!r.errors.length);
   const invalid=bulkRows.filter(r=>!r.skip&&r.errors.length);
   if(invalid.length){ setStatus('Fix or skip '+invalid.length+' invalid rows before saving.'); return; }
   if(!valid.length){ setStatus('No valid rows to save.'); return; }
   const inserted=valid.map(r=>sanitizeQuestion({q:r.q,opts:r.opts,correct:r.correct,fact:r.fact}));
-  questions=questions.concat(inserted);
-  editIdx=questions.length-inserted.length;
+  await questionRepository.insertMany(inserted);
+  questionSearchTerm='';
+  const search=document.getElementById('questionSearch'); if(search) search.value='';
+  await loadQuestionsFromRepository();
+  editIdx=Math.max(0,questions.length-inserted.length);
   syncAfterQuestionChange(true);
   const skipped=bulkRows.length-valid.length;
   bulkLastSummary={total:bulkRows.length,inserted:inserted.length,skipped,errors:bulkRows.flatMap(r=>r.errors)};
@@ -1088,6 +1221,7 @@ function bodyFlash(cb){
   setTimeout(cb,80);
 }
 function renderQ(){
+  if(!questions.length) return;
   answered=false;
   clearTimeout(answerTimeout);
   const q=questions[cur];const total=questions.length;
@@ -1192,7 +1326,7 @@ renderQ();
   setStatus('Standalone quiz HTML downloaded.');
 }
 
-renderQScroll();loadEdit();renderQ();
+initializeQuestionStorage().catch(e=>{questions=DEFAULT_QUESTIONS.map(sanitizeQuestion);syncAfterQuestionChange(true);setStatus('Storage failed: '+e.message+'. Using defaults for this session.');});
 </script>
 </body>
 </html>
